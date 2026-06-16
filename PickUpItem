@@ -1,53 +1,72 @@
 using UnityEngine;
 
+[RequireComponent(typeof(Collider))]
 public class PickupItem : MonoBehaviour
 {
-    [Header("Item Settings")]
-    [SerializeField] private float rotationSpeed = 100f;
-    [SerializeField] private float bobSpeed = 2f;
-    [SerializeField] private float bobHeight = 0.3f;
-    
+    [Header("Pickup")]
+    public string playerTag = "Player";
+    public bool destroyOnPickup = true;
+
+    [Header("Rotation")]
+    public float rotationSpeed = 90f;
+
+    [Header("Floating")]
+    public float floatHeight = 0.25f;
+    public float floatSpeed = 2f;
+
     private Vector3 startPosition;
-    private bool isPickedUp = false;
-    
-    void Start()
+
+    private void Start()
     {
-        // Запоминаем начальную позицию для анимации подпрыгивания
         startPosition = transform.position;
+
+        Collider itemCollider = GetComponent<Collider>();
+        itemCollider.isTrigger = true;
     }
-    
-    void Update()
+
+    private void Update()
     {
-        if (isPickedUp) return;
-        
-        // Вращение предмета
-        transform.Rotate(Vector3.up * rotationSpeed * Time.deltaTime);
-        
-        // Подпрыгивание (синусоида)
-        float newY = startPosition.y + Mathf.Sin(Time.time * bobSpeed) * bobHeight;
-        transform.position = new Vector3(transform.position.x, newY, transform.position.z);
+        RotateItem();
+        FloatItem();
     }
-    
-    // Срабатывает при касании с коллайдером
-    void OnTriggerEnter(Collider other)
+
+    private void RotateItem()
     {
-        if (isPickedUp) return;
-        
-        // Проверяем, что касание произошло с игроком
-        if (other.CompareTag("Player"))
+        transform.Rotate(Vector3.up, rotationSpeed * Time.deltaTime, Space.World);
+    }
+
+    private void FloatItem()
+    {
+        float newY = startPosition.y + Mathf.Sin(Time.time * floatSpeed) * floatHeight;
+
+        transform.position = new Vector3(
+            startPosition.x,
+            newY,
+            startPosition.z
+        );
+    }
+
+    private void OnTriggerEnter(Collider other)
+    {
+        if (!other.CompareTag(playerTag))
         {
-            Pickup();
+            return;
         }
+
+        PickUp();
     }
-    
-    void Pickup()
+
+    private void PickUp()
     {
-        isPickedUp = true;
-        
-        // Здесь можно добавить логику добавления предмета в инвентарь
-        Debug.Log($"Подобран предмет: {gameObject.name}");
-        
-        // Уничтожаем предмет
-        Destroy(gameObject);
+        Debug.Log("Предмет подобран: " + gameObject.name);
+
+        if (destroyOnPickup)
+        {
+            Destroy(gameObject);
+        }
+        else
+        {
+            gameObject.SetActive(false);
+        }
     }
 }
