@@ -1,68 +1,58 @@
 using UnityEngine;
 
-public class PlayerMovement : MonoBehaviour
+public class PlayerMovement3D : MonoBehaviour
 {
     [Header("Movement Settings")]
     [SerializeField] private float moveSpeed = 5f;
     [SerializeField] private float jumpForce = 8f;
-    [SerializeField] private float groundCheckDistance = 0.2f;
+    [SerializeField] private float groundCheckDistance = 0.1f;
     [SerializeField] private LayerMask groundLayer;
     
-    [Header("References")]
-    [SerializeField] private Transform groundCheckPoint;
+    [Header("Rotation")]
+    [SerializeField] private float rotationSpeed = 10f;
     
-    private Rigidbody2D rb;
+    private CharacterController controller;
+    private Vector3 velocity;
     private bool isGrounded;
-    private float moveInput;
     
     void Start()
     {
-        rb = GetComponent<Rigidbody2D>();
-        
-        // Если точка для проверки земли не назначена, создаем её автоматически
-        if (groundCheckPoint == null)
-        {
-            GameObject checkPoint = new GameObject("GroundCheck");
-            checkPoint.transform.parent = transform;
-            checkPoint.transform.localPosition = new Vector3(0, -0.5f, 0);
-            groundCheckPoint = checkPoint.transform;
-        }
+        controller = GetComponent<CharacterController>();
     }
     
     void Update()
     {
-        // Получаем ввод с клавиатуры
-        moveInput = Input.GetAxisRaw("Horizontal");
-        
         // Проверка на земле
-        isGrounded = Physics2D.Raycast(groundCheckPoint.position, Vector2.down, groundCheckDistance, groundLayer);
+        isGrounded = controller.isGrounded;
+        
+        if (isGrounded && velocity.y < 0)
+        {
+            velocity.y = -2f;
+        }
+        
+        // Получаем ввод
+        float horizontal = Input.GetAxis("Horizontal");
+        float vertical = Input.GetAxis("Vertical");
+        Vector3 move = transform.right * horizontal + transform.forward * vertical;
+        
+        // Движение
+        controller.Move(move * moveSpeed * Time.deltaTime);
+        
+        // Поворот персонажа в направлении движения
+        if (move != Vector3.zero)
+        {
+            Quaternion targetRotation = Quaternion.LookRotation(move);
+            transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, rotationSpeed * Time.deltaTime);
+        }
         
         // Прыжок
         if (Input.GetButtonDown("Jump") && isGrounded)
         {
-            Jump();
+            velocity.y = Mathf.Sqrt(jumpForce * -2f * Physics.gravity.y);
         }
-    }
-    
-    void FixedUpdate()
-    {
-        // Движение по горизонтали
-        rb.linearVelocity = new Vector2(moveInput * moveSpeed, rb.linearVelocity.y);
-    }
-    
-    void Jump()
-    {
-        rb.linearVelocity = new Vector2(rb.linearVelocity.x, jumpForce);
-    }
-    
-    // Визуализация для отладки
-    void OnDrawGizmosSelected()
-    {
-        if (groundCheckPoint != null)
-        {
-            Gizmos.color = Color.red;
-            Gizmos.DrawLine(groundCheckPoint.position, 
-                           groundCheckPoint.position + Vector3.down * groundCheckDistance);
-        }
+        
+        // Применяем гравитацию
+        velocity.y += Physics.gravity.y * Time.deltaTime;
+        controller.Move(velocity * Time.deltaTime);
     }
 }
