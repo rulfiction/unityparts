@@ -1,133 +1,134 @@
 using UnityEngine;
 
-public class PlayerMovement3D : MonoBehaviour
+[RequireComponent(typeof(CharacterController))]
+public class ThirdPersonCapsuleController : MonoBehaviour
 {
-    [Header("Movement Settings")]
-    [SerializeField] private float walkSpeed = 5f;
-    [SerializeField] private float sprintSpeed = 10f;
-    [SerializeField] private float jumpForce = 8f;
-    [SerializeField] private float gravity = -9.81f;
-    
-    [Header("Mouse Look")]
-    [SerializeField] private float mouseSensitivity = 2f;
-    [SerializeField] private float maxLookAngle = 80f;
-    [SerializeField] private Transform cameraTransform;
-    
-    [Header("Ground Check")]
-    [SerializeField] private Transform groundCheck;
-    [SerializeField] private float groundDistance = 0.4f;
-    
+    [Header("Camera")]
+    public Transform cameraTransform;
+    public float cameraDistance = 4f;
+    public float cameraHeight = 1.6f;
+    public float mouseSensitivity = 3f;
+    public float minPitch = -30f;
+    public float maxPitch = 70f;
+
+    [Header("Movement")]
+    public float walkSpeed = 5f;
+    public float sprintSpeed = 9f;
+    public float rotationSpeed = 12f;
+
+    [Header("Jump & Gravity")]
+    public float jumpHeight = 1.5f;
+    public float gravity = -20f;
+    public float groundedStickForce = -2f;
+
     private CharacterController controller;
-    private Vector3 velocity;
-    private bool isGrounded;
-    private float currentSpeed;
-    private float xRotation = 0f;
-    
-    void Start()
+    private float verticalVelocity;
+    private float yaw;
+    private float pitch = 20f;
+
+    private void Awake()
     {
         controller = GetComponent<CharacterController>();
-        
-        // Автоматически создаем точку для проверки земли
-        if (groundCheck == null)
-        {
-            GameObject checkPoint = new GameObject("GroundCheck");
-            checkPoint.transform.parent = transform;
-            checkPoint.transform.localPosition = new Vector3(0, -0.9f, 0);
-            groundCheck = checkPoint.transform;
-        }
-        
-        // Если камера не назначена - ищем её
-        if (cameraTransform == null)
+
+        if (cameraTransform == null && Camera.main != null)
         {
             cameraTransform = Camera.main.transform;
         }
-        
-        // Блокируем курсор в центре экрана
+
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
     }
-    
-    void Update()
+
+    private void Update()
     {
-        // Проверка земли
-        isGrounded = Physics.CheckSphere(groundCheck.position, groundDistance);
-        
-        if (isGrounded && velocity.y < 0)
-        {
-            velocity.y = -2f;
-        }
-        
-        // --- УПРАВЛЕНИЕ МЫШЬЮ ---
+        HandleMouseLook();
+        HandleMovement();
+    }
+
+    private void LateUpdate()
+    {
+        UpdateCameraPosition();
+    }
+
+    private void HandleMouseLook()
+    {
         float mouseX = Input.GetAxis("Mouse X") * mouseSensitivity;
         float mouseY = Input.GetAxis("Mouse Y") * mouseSensitivity;
-        
-        // Поворот персонажа по горизонтали (влево-вправо)
-        transform.Rotate(Vector3.up * mouseX);
-        
-        // Поворот камеры по вертикали (вверх-вниз)
-        xRotation -= mouseY;
-        xRotation = Mathf.Clamp(xRotation, -maxLookAngle, maxLookAngle);
-        cameraTransform.localRotation = Quaternion.Euler(xRotation, 0f, 0f);
-        
-        // --- ДВИЖЕНИЕ ---
+
+        yaw += mouseX;
+        pitch -= mouseY;
+        pitch = Mathf.Clamp(pitch, minPitch, maxPitch);
+    }
+
+    private void HandleMovement()
+    {
+        bool isGrounded = controller.isGrounded;
+
+        if (isGrounded && verticalVelocity < 0f)
+        {
+            verticalVelocity = groundedStickForce;
+        }
+
         float horizontal = Input.GetAxis("Horizontal");
         float vertical = Input.GetAxis("Vertical");
-        
-        // Движение ВПЕРЕД/НАЗАД/ВЛЕВО/ВПРАВО относительно направления камеры
-        Vector3 forward = cameraTransform.forward;
-        Vector3 right = cameraTransform.right;
-        
-        // Убираем наклон по вертикали для движения по горизонтали
-        forward.y = 0f;
-        right.y = 0f;
-        forward.Normalize();
-        right.Normalize();
-        
-        Vector3 move = forward * vertical + right * horizontal;
-        
-        if (move.magnitude > 1f)
+
+        Vector3 cameraForward = cameraTransform.forward;
+        Vector3 cameraRight = cameraTransform.right;
+
+        cameraForward.y = 0f;
+        cameraRight.y = 0f;
+
+        cameraForward.Normalize();
+        cameraRight.Normalize();
+
+        Vector3 moveDirection = cameraForward * vertical + cameraRight * horizontal;
+
+        if (moveDirection.magnitude > 1f)
         {
-            move.Normalize();
+            moveDirection.Normalize();
         }
-        
-        // Спринт
-        bool isSprinting = Input.GetKey(KeyCode.LeftShift) && move.magnitude > 0.1f;
-        currentSpeed = isSprinting ? sprintSpeed : walkSpeed;
-        
-        // Движение
-        controller.Move(move * currentSpeed * Time.deltaTime);
-        
-        // --- ПРЫЖОК ---
-        if (Input.GetButtonDown("Jump") && isGrounded)
+
+        bool isSprinting = Input.GetKey(KeyCode.LeftShift);
+        float currentSpeed = isSprinting ? sprintSpeed : walkSpeed;
+
+        Vector3 horizontalMovement = moveDirection * currentSpeed;
+
+        if (moveDirection.sqrMagnitude > 0.01f)
         {
-            velocity.y = Mathf.Sqrt(jumpForce * -2f * gravity);
+            Quaternion targetRotation = Quaternion.LookRotation(moveDirection);
+            transform.rotation = Quaternion.Slerp(
+                transform.rotation,
+                targetRotation,
+                rotationSpeed * Time.deltaTime
+            );
         }
-        
-        // Гравитация
-        velocity.y += gravity * Time.deltaTime;
-        controller.Move(velocity * Time.deltaTime);
-        
-        // Отключение курсора по Escape
-        if (Input.GetKeyDown(KeyCode.Escape))
+
+        if (Input.GetKeyDown(KeyCode.Space) && isGrounded)
         {
-            Cursor.lockState = CursorLockMode.None;
-            Cursor.visible = true;
+            verticalVelocity = Mathf.Sqrt(jumpHeight * -2f * gravity);
         }
-        
-        // Возврат курсора по клику
-        if (Input.GetMouseButtonDown(0) && Cursor.lockState == CursorLockMode.None)
-        {
-            Cursor.lockState = CursorLockMode.Locked;
-            Cursor.visible = false;
-        }
+
+        verticalVelocity += gravity * Time.deltaTime;
+
+        Vector3 finalMovement = horizontalMovement + Vector3.up * verticalVelocity;
+
+        controller.Move(finalMovement * Time.deltaTime);
     }
-    
-    void OnDrawGizmosSelected()
+
+    private void UpdateCameraPosition()
     {
-        if (groundCheck != null)
+        if (cameraTransform == null)
         {
-            Gizmos.color = Color.green;
-            Gizmos.DrawWireSphere(groundCheck.position, groundDistance);
+            return;
         }
+
+        Vector3 pivotPosition = transform.position + Vector3.up * cameraHeight;
+
+        Quaternion cameraRotation = Quaternion.Euler(pitch, yaw, 0f);
+
+        Vector3 cameraOffset = cameraRotation * new Vector3(0f, 0f, -cameraDistance);
+
+        cameraTransform.position = pivotPosition + cameraOffset;
+        cameraTransform.rotation = cameraRotation;
     }
 }
