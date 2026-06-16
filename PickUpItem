@@ -1,0 +1,53 @@
+using UnityEngine;
+
+public class PickupItem : MonoBehaviour
+{
+    [Header("Item Settings")]
+    [SerializeField] private float rotationSpeed = 100f;
+    [SerializeField] private float bobSpeed = 2f;
+    [SerializeField] private float bobHeight = 0.3f;
+    
+    private Vector3 startPosition;
+    private bool isPickedUp = false;
+    
+    void Start()
+    {
+        // Запоминаем начальную позицию для анимации подпрыгивания
+        startPosition = transform.position;
+    }
+    
+    void Update()
+    {
+        if (isPickedUp) return;
+        
+        // Вращение предмета
+        transform.Rotate(Vector3.up * rotationSpeed * Time.deltaTime);
+        
+        // Подпрыгивание (синусоида)
+        float newY = startPosition.y + Mathf.Sin(Time.time * bobSpeed) * bobHeight;
+        transform.position = new Vector3(transform.position.x, newY, transform.position.z);
+    }
+    
+    // Срабатывает при касании с коллайдером
+    void OnTriggerEnter(Collider other)
+    {
+        if (isPickedUp) return;
+        
+        // Проверяем, что касание произошло с игроком
+        if (other.CompareTag("Player"))
+        {
+            Pickup();
+        }
+    }
+    
+    void Pickup()
+    {
+        isPickedUp = true;
+        
+        // Здесь можно добавить логику добавления предмета в инвентарь
+        Debug.Log($"Подобран предмет: {gameObject.name}");
+        
+        // Уничтожаем предмет
+        Destroy(gameObject);
+    }
+}
